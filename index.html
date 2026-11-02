@@ -458,10 +458,12 @@ const SEC=['Appearance','Aroma','Flavor','Mouthfeel','Overall Impression'];
 const SEC_TH={'Appearance':'ลักษณะภายนอก','Aroma':'กลิ่น','Flavor':'รสชาติ','Mouthfeel':'สัมผัสในปาก','Overall Impression':'ภาพรวม'};
 const BY=Object.fromEntries(STYLES.map(s=>[s.c,s]));
 const ALLPOOL=STYLES.filter(s=>!s.gen);
-// Levels: 1 = 20 popular styles, 2 = 50, 3 = everything  [lists are the app author's judgement, editable per style]
-const LV1=['1A','1B','1D','2A','3B','4A','5B','5D','6A','10A','12C','15B','16B','18A','18B','20A','21A','21C','24A','25B'];
-const LV2=LV1.concat(['4B','7A','8A','9A','9C','11B','13C','17D','19A','19C','20B','20C','22A','23A','25C','26B','26C','26D','10B','3A','1C','2C','6B','7B','8B','13B','15A','16A','21B:Black IPA','25A']);
-const LEVELS=[{k:1,name:'เริ่มต้น',sub:'20 สไตล์ยอดนิยม'},{k:2,name:'กลาง',sub:'50 สไตล์'},{k:3,name:'มาสเตอร์',sub:'ทุกสไตล์'}];
+// Levels: 1 = 30 popular styles, 2 = 60, 3 = everything  [lists are the app author's judgement, editable per style]
+const LV1=['1A','1B','1D','2A','3B','4A','5B','5D','6A','10A','12C','15B','16B','18A','18B','20A','21A','21C','24A','25B',
+  '4B','7A','9A','11B','13C','19A','20C','22A','23A','26C'];
+const LV2=LV1.concat(['8A','9C','17D','19C','20B','25C','26B','26D','10B','3A','1C','2C','6B','7B','8B','13B','15A','16A','21B:Black IPA','25A',
+  '10C','4C','6C','16D','17C','19B','22C','23B','23G','21B:White IPA']);
+const LEVELS=[{k:1,name:'เริ่มต้น',sub:'30 สไตล์ยอดนิยม'},{k:2,name:'กลาง',sub:'60 สไตล์'},{k:3,name:'มาสเตอร์',sub:'ทุกสไตล์'}];
 function baseLevelOf(c){return LV1.includes(c)?1:LV2.includes(c)?2:3}
 function styleLevel(s){return (P.lvl&&P.lvl[s.c])||baseLevelOf(s.c)}
 function curLevel(){return (P.prefs&&P.prefs.level)||1}
