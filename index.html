@@ -103,6 +103,21 @@ nav.tabs button[aria-selected="true"]{color:var(--ink);border-color:var(--amber)
 .node.empty{opacity:.6}
 @keyframes pulse{50%{transform:scale(1.08)}}
 
+/* level picker */
+.levels{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.lvbtn{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;background:var(--card);color:var(--ink);border:2px solid var(--line);border-bottom-width:5px;border-radius:16px;padding:10px 12px;cursor:pointer;font:inherit;min-width:0}
+.lvbtn:active{transform:translateY(3px);border-bottom-width:2px}
+.lvbtn b{font:500 1rem var(--f-display)} .lvbtn .muted{font-size:.75rem;line-height:1.35}
+.lvbtn .lvn{color:var(--amber);font-size:.85rem;letter-spacing:.1em}
+.lvbtn .xpbar{width:100%;margin-top:4px}.lvbtn .xpbar i{background:var(--hop)}
+.lvbtn .lvm{font:500 .68rem var(--f-mono);color:var(--muted)}
+.lvbtn.on{border-color:var(--amber-deep);background:var(--amber-soft);box-shadow:0 0 0 3px var(--amber-soft)}
+.lvhint{margin:0;padding:8px 12px;border-radius:12px;background:var(--hop-soft);color:var(--ink);font-size:.9rem}
+.pickers{display:flex;flex-direction:column;gap:4px;align-items:flex-end}
+.lvpick button{min-width:34px;color:var(--amber-deep);font-size:.66rem}
+.tierpick.lvpick button.on{background:var(--amber);border-color:var(--amber-deep);color:var(--amber-ink)}
+#slv{flex-wrap:wrap}
+@media (max-width:560px){.lvbtn{padding:8px}.lvbtn .muted{display:none}}
 /* practice modes */
 .modes{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
 .mode{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;background:var(--card);color:var(--ink);border:2px solid var(--line);border-bottom-width:5px;border-radius:18px;padding:14px;cursor:pointer;font:inherit}
@@ -442,14 +457,23 @@ const addDays=(ds,n)=>{const [y,m,d]=ds.split('-').map(Number);const t=new Date(
 const SEC=['Appearance','Aroma','Flavor','Mouthfeel','Overall Impression'];
 const SEC_TH={'Appearance':'ลักษณะภายนอก','Aroma':'กลิ่น','Flavor':'รสชาติ','Mouthfeel':'สัมผัสในปาก','Overall Impression':'ภาพรวม'};
 const BY=Object.fromEntries(STYLES.map(s=>[s.c,s]));
-const POOL=STYLES.filter(s=>!s.gen);
+const ALLPOOL=STYLES.filter(s=>!s.gen);
+// Levels: 1 = 20 popular styles, 2 = 50, 3 = everything  [lists are the app author's judgement, editable per style]
+const LV1=['1A','1B','1D','2A','3B','4A','5B','5D','6A','10A','12C','15B','16B','18A','18B','20A','21A','21C','24A','25B'];
+const LV2=LV1.concat(['4B','7A','8A','9A','9C','11B','13C','17D','19A','19C','20B','20C','22A','23A','25C','26B','26C','26D','10B','3A','1C','2C','6B','7B','8B','13B','15A','16A','21B:Black IPA','25A']);
+const LEVELS=[{k:1,name:'เริ่มต้น',sub:'20 สไตล์ยอดนิยม'},{k:2,name:'กลาง',sub:'50 สไตล์'},{k:3,name:'มาสเตอร์',sub:'ทุกสไตล์'}];
+function baseLevelOf(c){return LV1.includes(c)?1:LV2.includes(c)?2:3}
+function styleLevel(s){return (P.lvl&&P.lvl[s.c])||baseLevelOf(s.c)}
+function curLevel(){return (P.prefs&&P.prefs.level)||1}
+function LP(){const L=curLevel();const p=ALLPOOL.filter(s=>styleLevel(s)<=L);return p.length>=6?p:ALLPOOL}
+function inPool(c){return LP().some(s=>s.c===c)}
 const FBY=Object.fromEntries(FAULTS.map(f=>[f.k,f]));
 const SRM_HEX=['#FFF4C4','#FFE699','#FFD878','#FFCA5A','#FFBF42','#FBB123','#F8A600','#F39C00','#EA8F00','#E58500','#DE7C00','#D77200','#CF6900','#CB6200','#C35900','#BB5100','#B54C00','#B04500','#A63E00','#A13700','#9B3200','#952D00','#8E2900','#882300','#821E00','#7B1A00','#771900','#701400','#6A0E00','#660D00','#5E0B00','#5A0A02','#600903','#520907','#4C0505','#470606','#440607','#3F0708','#3B0607','#3A070B','#36080A'];
 const srmHex=v=>SRM_HEX[Math.max(0,Math.min(40,Math.round(v)))];
 const INTERVAL=[0,1,2,4,8,16,32];
 
 // ---------- progress store ----------
-const blank=()=>({v:1,items:{},days:{},streak:{n:0,last:''},tiers:{},modes:{},prefs:{th:false,sound:true},xp:0,badges:{},best:{combo:0}});
+const blank=()=>({v:1,items:{},days:{},streak:{n:0,last:''},tiers:{},modes:{},prefs:{th:false,sound:true,level:1},lvl:{},xp:0,badges:{},best:{combo:0}});
 let P=blank(), dbDoc=null, saveT=null, syncMode='local';
 const LS='bjcp-daily-flight-v1';
 function lsGet(){try{return JSON.parse(localStorage.getItem(LS)||'null')}catch(e){return null}}
@@ -464,7 +488,7 @@ function merge(a,b){ // keep the richer record per item
   o.streak=(a.streak&&b.streak&&(a.streak.last>b.streak.last))?a.streak:(b.streak||a.streak);
   o.tiers=Object.assign({},a.tiers,b.tiers); o.modes=Object.assign({},a.modes,b.modes);
   o.xp=Math.max(a.xp||0,b.xp||0); o.badges=Object.assign({},a.badges,b.badges); o.best={combo:Math.max((a.best||{}).combo||0,(b.best||{}).combo||0)};
-  o.prefs=Object.assign({th:false,sound:true},a.prefs,b.prefs);
+  o.prefs=Object.assign({th:false,sound:true,level:1},a.prefs,b.prefs); o.lvl=Object.assign({},a.lvl,b.lvl);
   return o;
 }
 function setSync(t){$('#c-sync').textContent=t}
@@ -516,12 +540,16 @@ function logDay(sec,ok){const d=P.days[today()]||(P.days[today()]={sec:0,q:0,c:0
 
 // ---------- picking ----------
 const W={A:.6,B:.3,C:.1};
-function pickStyle(exclude=[],pool=POOL){
-  const avail=pool.filter(s=>!exclude.includes(s.c));
+function pickStyle(exclude=[],pool=LP()){
+  let avail=pool.filter(s=>!exclude.includes(s.c)); if(!avail.length)avail=pool.slice();
   const byT={A:[],B:[],C:[]}; avail.forEach(s=>byT[tierOf(s)].push(s));
   let r=Math.random(),t='A';
-  const tiers=['A','B','C'].filter(x=>byT[x].length); let tot=tiers.reduce((a,x)=>a+W[x],0);
-  for(const x of tiers){r-=W[x]/tot; if(r<=0){t=x;break} t=x}
+  const tiers=['A','B','C'].filter(x=>byT[x].length);
+  // share of a tier shrinks with how much of that tier the level unlocks, so lower levels stay basics-heavy
+  const full={A:0,B:0,C:0}; ALLPOOL.forEach(s=>full[tierOf(s)]++);
+  const wt=x=>W[x]*Math.min(1,byT[x].length/Math.max(1,full[x]));
+  let tot=tiers.reduce((a,x)=>a+wt(x),0);
+  for(const x of tiers){r-=wt(x)/tot; if(r<=0){t=x;break} t=x}
   const L=byT[t]; const ws=L.map(s=>{const it=P.items['s:'+s.c];return it?(it.b<=1?3:1/it.b):2.5});
   let sum=ws.reduce((a,b)=>a+b,0),x=Math.random()*sum;
   for(let i=0;i<L.length;i++){x-=ws[i];if(x<=0)return L[i]}
@@ -531,7 +559,7 @@ const tagsOf=s=>s.tags.split(',').map(x=>x.trim()).filter(Boolean);
 function confusable(s,n,extraExclude=[]){
   const tg=tagsOf(s), fam=tg.find(t=>t.endsWith('-family')), col=tg.find(t=>t.endsWith('-color')), str=tg.find(t=>t.endsWith('-strength'));
   const comp=(s.en['Style Comparison']||'').toLowerCase();
-  const sc=POOL.filter(o=>o.c!==s.c&&!extraExclude.includes(o.c)).map(o=>{
+  const sc=LP().filter(o=>o.c!==s.c&&!extraExclude.includes(o.c)).map(o=>{
     const ot=tagsOf(o);let v=Math.random()*1.5;
     if(fam&&ot.includes(fam))v+=3; if(col&&ot.includes(col))v+=2; if(str&&ot.includes(str))v+=1; if(o.cat===s.cat)v+=2;
     if(comp.includes(o.n.toLowerCase()))v+=2.5; return [v,o]});
@@ -540,7 +568,7 @@ function confusable(s,n,extraExclude=[]){
 }
 function twinOf(s){
   const comp=(s.en['Style Comparison']||'').toLowerCase();
-  const m=POOL.filter(o=>o.c!==s.c&&o.n.length>4&&comp.includes(o.n.toLowerCase()));
+  const m=LP().filter(o=>o.c!==s.c&&o.n.length>4&&comp.includes(o.n.toLowerCase()));
   return m.length?pick(m):confusable(s,1)[0];
 }
 const GENERIC_WORDS=new Set(['beer','ale','lager','strong','pale','dark','amber','brown','red','golden','light','international','specialty','style','american','english','german','belgian','british','irish','czech','premium','extra','sweet','imperial','double','classic','common','the','and','or','of']);
@@ -686,7 +714,8 @@ const RULE_TXT={F:'ข้อบกพร่อง — ไม่ควรพบ/�
 function clinicCards(){
   const useRule=Math.random()<0.6;
   let f,rule=null,s=null;
-  if(useRule){rule=pick(RULINGS);f=FBY[rule.f];s=BY[rule.c]}else{f=pick(FAULTS)}
+  const RL=RULINGS.filter(r=>inPool(r.c));
+  if(useRule&&RL.length){rule=pick(RL);f=FBY[rule.f];s=BY[rule.c]}else{f=pick(FAULTS)}
   const where=s?`ใน ${styleLabel(s)}`:'ในเบียร์ที่ส่งประกวด';
   const cards=[];
   const fopts=shuffle([f].concat(faultDistractors(f,3)));
@@ -740,7 +769,7 @@ function dueCards(max){
 // ---------- daily plan ----------
 let SOTD=null;
 function sotdFor(day){ // stable per day
-  if(P.days[day]&&P.days[day].sotd&&BY[P.days[day].sotd])return BY[P.days[day].sotd];
+  if(P.days[day]&&P.days[day].sotd&&BY[P.days[day].sotd]&&inPool(P.days[day].sotd))return BY[P.days[day].sotd];
   const s=pickStyle(); const d=P.days[day]||(P.days[day]={sec:0,q:0,c:0,done:false}); d.sotd=s.c; save(); return s;
 }
 function buildDaily(){
@@ -752,7 +781,7 @@ function buildDaily(){
   blocks.push({name:'ประกอบ Scoresheet: '+s.n,min:4,cards:scoresheetCards(s)});
   blocks.push({name:'คู่แฝด',min:5,cards:twinCards(s,6)});
   const odd=[];for(let i=0;i<12&&odd.length<4;i++){const x=pickStyle(used);used.push(x.c);const c=oddCard(x);if(c)odd.push(c)}
-  const sl=[];for(let i=0;i<3;i++){const x=pickStyle(used.concat(POOL.filter(p=>!p.SRM).map(p=>p.c)));used.push(x.c);sl.push(sliderCard(x))}
+  const sl=[];for(let i=0;i<3;i++){const x=pickStyle(used.concat(LP().filter(p=>!p.SRM).map(p=>p.c)));used.push(x.c);sl.push(sliderCard(x))}
   blocks.push({name:'ไม่เข้าพวก + กะค่า',min:4,cards:odd.concat(sl)});
   let cl=[];for(let i=0;i<3;i++)cl=cl.concat(clinicCards());
   blocks.push({name:'Off-flavor Clinic',min:6,cards:cl});
@@ -846,7 +875,7 @@ function dailyBlock(id){
   if(id==='scoresheet')return scoresheetCards(s);
   if(id==='twins')return twinCards(s,6);
   if(id==='odd'){const odd=[];for(let i=0;i<12&&odd.length<4;i++){const x=pickStyle(used);used.push(x.c);const c=oddCard(x);if(c)odd.push(c)}
-    const sl=[];for(let i=0;i<3;i++){const x=pickStyle(used.concat(POOL.filter(p=>!p.SRM).map(p=>p.c)));used.push(x.c);sl.push(sliderCard(x))}return odd.concat(sl)}
+    const sl=[];for(let i=0;i<3;i++){const x=pickStyle(used.concat(LP().filter(p=>!p.SRM).map(p=>p.c)));used.push(x.c);sl.push(sliderCard(x))}return odd.concat(sl)}
   if(id==='clinic'){let cl=[];for(let i=0;i<3;i++)cl=cl.concat(clinicCards());return cl}
   return [];
 }
@@ -948,6 +977,25 @@ function updateChips(){
   const L=levelOf(P.xp); $('#c-lv').textContent=L.lv; $('#c-xp').style.width=(L.cur/L.need*100)+'%'; $('#c-title').textContent=titleOf(L.lv);
   $('#snd').innerHTML=ico(P.prefs.sound?'sound':'mute'); $('#snd').setAttribute('aria-label',P.prefs.sound?'ปิดเสียง':'เปิดเสียง');
 }
+function mastered(s){const it=P.items['s:'+s.c];return it&&it.b>=3}
+function levelStats(k){const L=ALLPOOL.filter(s=>styleLevel(s)<=k);return {n:L.length,m:L.filter(mastered).length}}
+function levelPanel(){
+  const cur=curLevel();
+  const st=levelStats(cur), next=LEVELS.find(l=>l.k===cur+1);
+  const ready=next&&st.n&&st.m/st.n>=0.7;
+  return `<div class="levels" role="radiogroup" aria-label="ระดับความยาก">${LEVELS.map(l=>{const x=levelStats(l.k);const pct=x.n?Math.round(x.m/x.n*100):0;
+    return `<button class="lvbtn ${l.k===cur?'on':''}" role="radio" aria-checked="${l.k===cur}" data-lv="${l.k}">
+      <span class="lvn">${'★'.repeat(l.k)}</span><b>${l.name}</b><span class="muted">${x.n} สไตล์ · ${l.sub}</span>
+      <span class="xpbar"><i style="width:${pct}%"></i></span><span class="lvm">จำแม่นแล้ว ${x.m}/${x.n}</span></button>`}).join('')}</div>
+    ${ready?`<p class="lvhint">จำระดับ${LEVELS[cur-1].name}แม่นแล้ว ${Math.round(st.m/st.n*100)}% — พร้อมขึ้น<b>${next.name}</b>แล้ว กดการ์ดด้านบนได้เลย</p>`:''}`;
+}
+function bindLevelPanel(){
+  document.querySelectorAll('.lvbtn').forEach(b=>b.onclick=()=>{
+    const k=+b.dataset.lv; if(k===curLevel())return;
+    P.prefs.level=k; const d=dayRec(); if(d.sotd&&!inPool(d.sotd))delete d.sotd;
+    save(); toast(`เปลี่ยนเป็นระดับ${LEVELS[k-1].name} · ${LP().length} สไตล์`,''); viewToday();
+  });
+}
 function viewToday(){
   const t=today(); SOTD=sotdFor(t); const s=SOTD; const d=dayRec(); const bd=d.bd||[];
   const due=Object.values(P.items).filter(v=>v.b>0&&v.d&&v.d<=t).length;
@@ -958,16 +1006,18 @@ function viewToday(){
     <div class="hero">
       <div class="hero-glass">${pintSvg(doneN/DAILY.length,color,150)}<div class="hero-count"><b>${doneN}</b>/${DAILY.length} ด่าน</div></div>
       <div class="hero-txt"><div class="eyebrow">${new Date().toLocaleDateString('th-TH',{weekday:'long',day:'numeric',month:'long'})} · Style of the Day</div>
-        <h1>${esc(s.n)}</h1><div class="row"><span class="code">${esc(s.c.split(':')[0])}</span><span class="muted">${esc(s.cn)}</span><span class="tierchip t${tierOf(s)}">ระดับ ${tierOf(s)}</span></div>
+        <h1>${esc(s.n)}</h1><div class="row"><span class="code">${esc(s.c.split(':')[0])}</span><span class="muted">${esc(s.cn)}</span><span class="tierchip t${tierOf(s)}">ความถี่ ${tierOf(s)}</span></div>
         <p class="muted" style="margin:6px 0 0">ผ่านแต่ละด่านแล้วแก้วจะเติมด้วยสีของสไตล์วันนี้ ${d.done?'<b class="okc">เต็มแก้วแล้ววันนี้!</b>':''}</p>
         <button class="btn primary big" id="go">${nextId?(doneN?'เล่นด่านต่อไป':'เริ่มเลย'):'เล่นซ้ำทั้งเซ็ต'}</button></div>
     </div>
+    ${levelPanel()}
     <div class="map">${DAILY.map((b,i)=>{const done=bd.includes(b.id), empty=b.id==='review'&&!due, now=b.id===nextId;
       return `<button class="node ${done?'done':''} ${now?'now':''} ${empty?'empty':''} ${i%2?'r':'l'}" data-b="${b.id}">
         <span class="disc">${done?ico('check'):ico(b.id)}</span>
         <span class="lbl"><b>${b.name}</b><span>${b.id==='review'?(due?`${Math.min(due,8)} ข้อค้าง`:'ยังไม่มีข้อค้าง · ข้ามได้'):b.sub} · ~${b.min} นาที</span></span></button>`}).join('')}</div>
-    <p class="legend" style="text-align:center;margin:0">ความถี่การสุ่ม: A 60% · B 30% · C 10% (ปรับได้ในแท็บสไตล์)</p>
+    <p class="legend" style="text-align:center;margin:0">สุ่มเฉพาะสไตล์ในระดับที่เลือก · ในนั้นยังสุ่มตามความถี่ A 60% · B 30% · C 10% (ปรับได้ในแท็บสไตล์)</p>
   </div>`;
+  bindLevelPanel();
   $('#go').onclick=()=>{
     const ids=nextId?DAILY.filter(b=>!bd.includes(b.id)).map(b=>b.id):DAILY.map(b=>b.id);
     startRun(ids.map(id=>({id,name:DAILY.find(x=>x.id===id).name,cards:dailyBlock(id)})),'เซ็ตวันนี้',true)};
@@ -977,14 +1027,14 @@ function viewToday(){
 }
 const MODES=[['detective','นักสืบสไตล์','เปิดคำบรรยายทีละหมวดแล้วทาย'],['scoresheet','ประกอบ Scoresheet','เลือกประโยคให้ถูกช่อง'],['twins','คู่แฝด','แยกสองสไตล์ที่ใกล้กัน'],['odd','ไม่เข้าพวก','หาประโยคที่มาจากสไตล์อื่น'],['slider','กะค่า','SRM / IBU / ABV'],['clinic','Off-flavor Clinic','ระบุ ตัดสิน สาเหตุ คำแนะนำ'],['review','ทบทวนข้อที่ค้าง','ตามรอบ spaced repetition']];
 function practiceSet(m,tierF){
-  const pool=tierF?POOL.filter(s=>tierOf(s)===tierF):POOL;
-  const used=[];const p=()=>{const x=pickStyle(used,pool.length?pool:POOL);used.push(x.c);return x};
+  const pool=tierF?LP().filter(s=>tierOf(s)===tierF):LP();
+  const used=[];const p=()=>{const x=pickStyle(used,pool.length?pool:LP());used.push(x.c);return x};
   let cards=[];
   if(m==='detective')for(let i=0;i<6;i++)cards.push(detectiveCard(p()));
   if(m==='scoresheet'){cards=scoresheetCards(p()).concat(scoresheetCards(p()))}
   if(m==='twins'){cards=twinCards(p(),5).concat(twinCards(p(),5))}
   if(m==='odd')for(let i=0;i<8;i++){const c=oddCard(p());if(c)cards.push(c)}
-  if(m==='slider'){const pool2=pool.filter(s=>s.SRM);for(let i=0;i<6;i++){const x=pickStyle(used,pool2.length?pool2:POOL.filter(s=>s.SRM));used.push(x.c);cards.push(sliderCard(x))}}
+  if(m==='slider'){const pool2=pool.filter(s=>s.SRM);for(let i=0;i<6;i++){const x=pickStyle(used,pool2.length?pool2:LP().filter(s=>s.SRM));used.push(x.c);cards.push(sliderCard(x))}}
   if(m==='clinic')for(let i=0;i<4;i++)cards=cards.concat(clinicCards());
   if(m==='review'){cards=dueCards(20);}
   return cards;
@@ -1001,17 +1051,20 @@ function viewPractice(){
     startRun([{name:MODES.find(x=>x[0]===m)[1],cards}],'ฝึกอิสระ',false)});
 }
 
-let styleQ='', openStyle=null;
+let styleQ='', openStyle=null, styleLv=0;
 function viewStyles(){
   const q=styleQ.toLowerCase();
-  const L=STYLES.filter(s=>!q||(s.c+' '+s.n+' '+s.cn).toLowerCase().includes(q));
+  const L=STYLES.filter(s=>(!q||(s.c+' '+s.n+' '+s.cn).toLowerCase().includes(q))&&(!styleLv||(!s.gen&&styleLevel(s)===styleLv)));
   $('#v-styles').innerHTML=`<div class="stack"><h2>สไตล์ทั้งหมด (${STYLES.length})</h2>
-    <p class="muted" style="margin:0">กด A/B/C เพื่อปรับโอกาสออก · จุดเขียว = ระดับความจำ (0–6) · แตะชื่อเพื่อเปิดการ์ด (ไว้ดูหลังตอบ ไม่ต้องท่อง)</p>
+    <p class="muted" style="margin:0">★ = อยู่ในระดับไหน (★ เริ่มต้น · ★★ กลาง · ★★★ มาสเตอร์) · A/B/C = โอกาสออก · จุดเขียว = ระดับความจำ (0–6) · แตะชื่อเพื่อเปิดการ์ด</p>
+    <div class="tierpick" id="slv">${['ทั้งหมด','★ เริ่มต้น','★★ กลาง','★★★ มาสเตอร์'].map((x,i)=>`<button data-k="${i}" class="${styleLv===i?'on':''}" style="width:auto;padding:0 10px">${x}</button>`).join('')}</div>
     <input class="search" id="sq" placeholder="ค้นหา เช่น 10A, Saison, Stout" value="${esc(styleQ)}">
-    <div class="slist">${L.map(s=>{const it=P.items['s:'+s.c];const b=it?it.b:0;return `<div class="srow" data-c="${esc(s.c)}"><span class="code">${esc(s.c.replace(':',' · '))}</span><span class="nm"><b>${esc(s.n)}</b>${s.gen?' <span class="tag">specialty</span>':''}<br><span class="muted" style="font-size:.82rem">${esc(s.cn)}</span><span class="dots" style="margin-top:4px">${[1,2,3,4,5,6].map(i=>`<i class="${i<=b?'f':''}"></i>`).join('')}</span></span><span class="tierpick">${['A','B','C'].map(t=>`<button data-t="${t}" class="${tierOf(s)===t?'on':''}" aria-label="ระดับ ${t}">${t}</button>`).join('')}</span></div>${openStyle===s.c?styleCardHtml(s):''}`}).join('')}</div></div>`;
+    <div class="slist">${L.map(s=>{const it=P.items['s:'+s.c];const b=it?it.b:0;return `<div class="srow" data-c="${esc(s.c)}"><span class="code">${esc(s.c.replace(':',' · '))}</span><span class="nm"><b>${esc(s.n)}</b>${s.gen?' <span class="tag">specialty</span>':''}<br><span class="muted" style="font-size:.82rem">${esc(s.cn)}</span><span class="dots" style="margin-top:4px">${[1,2,3,4,5,6].map(i=>`<i class="${i<=b?'f':''}"></i>`).join('')}</span></span><span class="pickers">${s.gen?'':`<span class="tierpick lvpick">${[1,2,3].map(k=>`<button data-lv="${k}" class="${styleLevel(s)===k?'on':''}" aria-label="อยู่ในระดับ ${LEVELS[k-1].name}" title="${LEVELS[k-1].name}">${'★'.repeat(k)}</button>`).join('')}</span>`}<span class="tierpick">${['A','B','C'].map(t=>`<button data-t="${t}" class="${tierOf(s)===t?'on':''}" aria-label="ความถี่ ${t}">${t}</button>`).join('')}</span></span></div>${openStyle===s.c?styleCardHtml(s):''}`}).join('')}</div></div>`;
+  $('#slv').querySelectorAll('button').forEach(b=>b.onclick=()=>{styleLv=+b.dataset.k;viewStyles()});
   const sq=$('#sq'); sq.oninput=()=>{styleQ=sq.value;viewStyles();const n=$('#sq');n.focus();n.setSelectionRange(n.value.length,n.value.length)};
   $('#v-styles').querySelectorAll('.srow').forEach(r=>{
-    r.querySelectorAll('.tierpick button').forEach(b=>b.onclick=e=>{e.stopPropagation();const s=BY[r.dataset.c];if(b.dataset.t===s.tier)delete P.tiers[s.c];else P.tiers[s.c]=b.dataset.t;save();viewStyles()});
+    r.querySelectorAll('.tierpick button[data-t]').forEach(b=>b.onclick=e=>{e.stopPropagation();const s=BY[r.dataset.c];if(b.dataset.t===s.tier)delete P.tiers[s.c];else P.tiers[s.c]=b.dataset.t;save();viewStyles()});
+    r.querySelectorAll('.lvpick button').forEach(b=>b.onclick=e=>{e.stopPropagation();const s=BY[r.dataset.c];const k=+b.dataset.lv;P.lvl=P.lvl||{};if(k===baseLevelOf(s.c))delete P.lvl[s.c];else P.lvl[s.c]=k;save();viewStyles()});
     r.onclick=()=>{openStyle=openStyle===r.dataset.c?null:r.dataset.c;viewStyles()};
   });
 }
@@ -1035,7 +1088,7 @@ function viewStats(){
     <div class="card prof"><div class="lvdisc">${LL.lv}</div><div style="min-width:0;flex:1"><div class="eyebrow">เลเวล ${LL.lv} · ${P.xp} XP ทั้งหมด</div><h3>${titleOf(LL.lv)}</h3><div class="xpbar"><i style="width:${LL.cur/LL.need*100}%"></i></div><div class="muted" style="font-size:.85rem">อีก ${LL.need-LL.cur} XP ถึง Lv.${LL.lv+1} · คอมโบสูงสุด ×${P.best.combo||0}</div></div></div>
     <h3>เหรียญ (${Object.keys(P.badges).length}/${BADGES.length})</h3><div class="badges">${BADGES.map(b=>badgeHtml(b[0],!!P.badges[b[0]])).join('')}</div>
     <h2 style="margin-top:8px">สถิติ</h2>
-    <div class="stats"><div class="stat"><div class="eyebrow">วันที่ทำครบ</div><div class="v">${done}</div></div><div class="stat"><div class="eyebrow">ความแม่นรวม</div><div class="v">${tq?Math.round(tc/tq*100):0}%</div><div class="muted">${tc}/${tq} ข้อ</div></div><div class="stat"><div class="eyebrow">สไตล์ที่เจอแล้ว</div><div class="v">${seenS}<span class="muted" style="font-size:1rem">/${POOL.length}</span></div></div></div>
+    <div class="stats"><div class="stat"><div class="eyebrow">วันที่ทำครบ</div><div class="v">${done}</div></div><div class="stat"><div class="eyebrow">ความแม่นรวม</div><div class="v">${tq?Math.round(tc/tq*100):0}%</div><div class="muted">${tc}/${tq} ข้อ</div></div><div class="stat"><div class="eyebrow">สไตล์ที่เจอแล้ว</div><div class="v">${seenS}<span class="muted" style="font-size:1rem">/${LP().length}</span></div></div></div>
     <h3>แยกตามโหมด</h3><div class="kv">${MODES.map(m=>{const s=P.modes[m[0]];const p=s&&s.t?Math.round(s.c/s.t*100):0;return `<div>${m[1]}</div><div><div class="bar"><i style="width:${p}%"></i></div><span class="muted" style="font-size:.8rem">${s?`${s.c}/${s.t} (${p}%)`:'ยังไม่ได้เล่น'}</span></div>`}).join('')}</div>
     <h3>สไตล์ที่พลาดบ่อย</h3><div>${weak.length?weak.map(([k,v])=>`<div>${styleLabel(BY[k.slice(2)]||{c:k,n:''})} <span class="muted">ผิด ${v.no} · ถูก ${v.ok}</span></div>`).join(''):'<span class="muted">ยังไม่มีข้อมูล</span>'}</div>
     <h3>Off-flavor ที่พลาดบ่อย</h3><div>${weakF.length?weakF.map(([k,v])=>`<div>${esc((FBY[k.slice(2)]||{en:k}).en)} <span class="muted">ผิด ${v.no} · ถูก ${v.ok}</span></div>`).join(''):'<span class="muted">ยังไม่มีข้อมูล</span>'}</div>
